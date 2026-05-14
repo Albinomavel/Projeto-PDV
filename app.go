@@ -19,7 +19,7 @@ var jwtKey = []byte("sua_chave_secreta_aqui")
 
 func main() {
 	var err error
-	db, err = sql.Open("rota do seu banco de dados aqui", "rota do seu banco de dados aqui")
+	db, err = sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/PROJETO_PDV")
 	if err != nil {
 		panic(err)
 	}
