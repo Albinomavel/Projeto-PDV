@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"errors"
 	"time"
@@ -62,11 +63,11 @@ type categoria struct {
 type usuarios struct {
 	ID           int    `json:"id"`
 	Username     string `json:"username"`
-	HashPassword string `json:"-"`
+	HashPassword string `json:"HashPassword"`
 	Cargo        string `json:"cargo"`
-	CompleteName string `json:"nome_completo"`
+	CompleteName string `json:"completeName"`
 	Email        string `json:"email"`
-	Telefone     string `json:"numero_telefone"`
+	Telefone     string `json:"telefone"`
 	Ativo        bool   `json:"ativo"`
 }
 type LoginRequest struct {
@@ -143,17 +144,22 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Erro ao decodificar o usuário", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(user.HashPassword) == "" {
+		http.Error(w, "A senha é obrigatória", http.StatusBadRequest)
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.HashPassword), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Erro ao gerar oa senha", http.StatusInternalServerError)
 		return
 	}
-	query := "INSERT INTO usuarios (username, senha_hash, cargo, nome_completo, ativo, email, numero_telefone) VALUES (?, ?, ?, ?, ?, ?, ?)"
-	res, err := db.Exec(query, user.Username, hash, user.Cargo, user.CompleteName, user.Ativo, user.Email, user.Telefone)
+	query := "INSERT INTO usuarios (username, senha_hash, cargo, nome_completo, email, numero_telefone, Ativo) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	res, err := db.Exec(query, user.Username, hash, user.Cargo, user.CompleteName, user.Email, user.Telefone, user.Ativo)
 	if err != nil {
 		http.Error(w, "Erro ao inserir o usuário no banco de dados", http.StatusInternalServerError)
 		return
 	}
+	user.HashPassword = ""
 	resultID, _ := res.LastInsertId()
 	user.ID = int(resultID)
 	w.Header().Set("Content-Type", "application/json")
