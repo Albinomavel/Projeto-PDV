@@ -33,10 +33,16 @@ func main() {
 
 	fmt.Println(`a rota é ` + route)
 
-	http.HandleFunc("/add-product", AddProduct)
-	http.HandleFunc("/add-category", middleware("operador", AddCategory))
-	http.HandleFunc("/add-user", AddUser)
+	//BLOCO DE ADIÇÃO DE DADOS
+	http.HandleFunc("/add-product", middleware(AddProduct, "supervisor", "ADM T.I"))
+	http.HandleFunc("/add-category", middleware(AddCategory, "supervisor", "ADM T.I", "operador"))
+	http.HandleFunc("/add-user", middleware(AddUser, "supervisor", "ADM T.I"))
 	http.HandleFunc("/login", Login)
+
+	//BLOCO DE REMOÇÃO DE DADOS
+	http.HandleFunc("/delete-product", middleware(DeleteProduct, "supervisor, ADM T.I"))
+	http.HandleFunc("/delete-category", middleware(DeleteCategory, "supervisor", "ADM T.I"))
+	http.HandleFunc("/delete-user", middleware(DeleteUser, "supervisor", "ADM T.I"))
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
@@ -96,7 +102,7 @@ type RefreshClaims struct {
 
 // FIM DO BLOCO DE STRUCTS
 
-// BLOCO DE FUNÇÕES PARA INSERIR DADOS NO BANCO DE DADOS
+// BLOCO DE FUNÇÕES PARA INSERIR DADOS NO DB
 func AddProduct(w http.ResponseWriter, r *http.Request) {
 	var product produto
 	err := json.NewDecoder(r.Body).Decode(&product)
@@ -168,7 +174,7 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Usuário inserido com sucesso!")
 }
 
-// FIM DO BLOCO DE FUNÇÕES PARA INSERIR DADOS NO BANCO DE DADOS
+// FIM DO BLOCO DE FUNÇÕES PARA INSERIR DADOS NO DB
 func getSecret() ([]byte, error) {
 	secret := jwtKey
 	if secret == nil {
@@ -260,7 +266,7 @@ func validateToken(tokenString string) (*Claims, error) {
 	}
 	return Claims, nil
 }
-func middleware(role string, next http.HandlerFunc) http.HandlerFunc {
+func middleware(next http.HandlerFunc, roles ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -277,8 +283,15 @@ func middleware(role string, next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Token inválido", http.StatusUnauthorized)
 			return
 		}
-		if claims.Cargo != role {
-			http.Error(w, "Acesso negado: permissão insuficiente", http.StatusForbidden)
+		autorizado := false
+		for _, role := range roles {
+			if claims.Cargo == role {
+				autorizado = true
+				break
+			}
+		}
+		if !autorizado {
+			http.Error(w, "Usuário não autorizado", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
@@ -297,3 +310,81 @@ var (
 )
 
 // FIM DO BLOCO DE SEGURANÇA
+
+// BLOCO DE FUNÇÕES PARA DELETAR DADOS NO DB
+func DeleteProduct(w http.ResponseWriter, r *http.Request) {
+	var product struct {
+		ID int `json:"id"`
+	}
+	er := json.NewDecoder(r.Body).Decode(&product)
+	if er != nil {
+		http.Error(w, "Erro ao decodificar o produto", http.StatusBadRequest)
+		return
+	}
+	query := "DELETE FROM produtos WHERE id = ?"
+	res, err := db.Exec(query, product.ID)
+	if err != nil {
+		http.Error(w, "Erro ao deletar o produto no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Produto não encontrado", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(product)
+
+	fmt.Println("Produto deletado com sucesso!")
+}
+func DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	var category categoria
+	err := json.NewDecoder(r.Body).Decode(&category)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar a categoria", http.StatusBadRequest)
+		return
+	}
+	query := "DELETE FROM categoria WHERE id = ?"
+	res, err := db.Exec(query, category.ID)
+	if err != nil {
+		http.Error(w, "Erro ao deletar a categoria no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Categoria não encontrada", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+
+	fmt.Println("Categoria deletada com sucesso!")
+}
+func DeleteUser(w http.ResponseWriter, r *http.Request) {
+	var user struct {
+		ID int `json:"id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar o usuário", http.StatusBadRequest)
+		return
+	}
+
+	query := "CHANGE Ativo = 0 FROM usuarios WHERE id = ?"
+	res, err := db.Exec(query, user.ID)
+	if err != nil {
+		http.Error(w, "Erro ao deletar o usuário no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Usuário não encontrado", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+
+	fmt.Println("Usuário deletado com sucesso!")
+}
+
+//FIM DE FUNÇÕES PARA DELETAR DADOS NO DB
