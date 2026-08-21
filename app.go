@@ -40,9 +40,15 @@ func main() {
 	http.HandleFunc("/login", Login)
 
 	//BLOCO DE REMOÇÃO DE DADOS
-	http.HandleFunc("/delete-product", middleware(DeleteProduct, "supervisor, ADM T.I"))
+	http.HandleFunc("/delete-product", middleware(DeleteProduct, "supervisor", "ADM T.I"))
 	http.HandleFunc("/delete-category", middleware(DeleteCategory, "supervisor", "ADM T.I"))
 	http.HandleFunc("/delete-user", middleware(DeleteUser, "supervisor", "ADM T.I"))
+
+	//BLOCO DE EDITAR DADOS
+	http.HandleFunc("/edit-product", middleware(EditProduct, "supervisor", "ADM T.I"))
+	http.HandleFunc("/edit-category", middleware(EditCategory, "supervisor", "ADM T.I"))
+	http.HandleFunc("/edit-user", middleware(EditUser, "supervisor", "ADM T.I"))
+	http.HandleFunc("/edit-password", middleware(EditPassword, "supervisor", "ADM T.I"))
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
@@ -154,6 +160,10 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "A senha é obrigatória", http.StatusBadRequest)
 		return
 	}
+	if len(user.HashPassword) < 6 {
+		http.Error(w, "A senha deve ter no mínimo 6 caracteres", http.StatusBadRequest)
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.HashPassword), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Erro ao gerar oa senha", http.StatusInternalServerError)
@@ -175,13 +185,8 @@ func AddUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // FIM DO BLOCO DE FUNÇÕES PARA INSERIR DADOS NO DB
-func getSecret() ([]byte, error) {
-	secret := jwtKey
-	if secret == nil {
-		return nil, ErrSecretAysento
-	}
-	return []byte(secret), nil
-}
+
+// BLOCO DE SEGURANÇA
 func Login(w http.ResponseWriter, r *http.Request) {
 	var loginReq LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&loginReq)
@@ -217,8 +222,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Login bem-sucedido!")
 }
-
-// BLOCO DE SEGURANÇA
+func getSecret() ([]byte, error) {
+	secret := jwtKey
+	if secret == nil {
+		return nil, ErrSecretAysento
+	}
+	return []byte(secret), nil
+}
 func generateToken(userID int, username, cargo string) (string, error) {
 	secret, err := getSecret()
 	if err != nil {
@@ -370,7 +380,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "CHANGE Ativo = 0 FROM usuarios WHERE id = ?"
+	query := "DELETE FROM usuarios WHERE id = ?"
 	res, err := db.Exec(query, user.ID)
 	if err != nil {
 		http.Error(w, "Erro ao deletar o usuário no banco de dados", http.StatusInternalServerError)
@@ -388,3 +398,140 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 //FIM DE FUNÇÕES PARA DELETAR DADOS NO DB
+
+// BLOCO DE FUNÇÕES PARA EDITAR DADOS NO DB
+func EditProduct(w http.ResponseWriter, r *http.Request) {
+	var product produto
+	err := json.NewDecoder(r.Body).Decode(&product) //decodificação do JSON
+	if err != nil {
+		http.Error(w, "Erro ao decodificar o produto", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if product.ID == 0 {
+		http.Error(w, "ID do produto não informado", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE produtos SET nome = ?, descricao = ?, categoria_id = ?, preco_venda = ?, estoque = ?, preco_compra = ?, codigo_barra = ? WHERE id = ?`
+	res, err := db.Exec(query, product.Nome, product.Descricao, product.CategoriaID, product.PrecoVenda, product.Estoque, product.PrecoCompra, product.CodigoBarras, product.ID)
+	if err != nil {
+		http.Error(w, "Erro ao editar o produto no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Produto não encontrado", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(product)
+
+	fmt.Println("Produto editado com sucesso!")
+}
+func EditCategory(w http.ResponseWriter, r *http.Request) {
+	var category categoria
+	err := json.NewDecoder(r.Body).Decode(&category)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar a categoria", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if category.ID == 0 {
+		http.Error(w, "ID da categoria não informado", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE categoria SET nome = ? WHERE id = ?`
+	res, err := db.Exec(query, category.Nome, category.ID)
+	if err != nil {
+		http.Error(w, "Erro ao editar a categoria no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Categoria não encontrada", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+
+	fmt.Println("Categoria editada com sucesso!")
+}
+func EditUser(w http.ResponseWriter, r *http.Request) {
+	var usr usuarios
+	err := json.NewDecoder(r.Body).Decode(&usr)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar o usuário", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if usr.ID == 0 {
+		http.Error(w, "ID do usuário não informado", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE usuarios SET username = ?, cargo = ?, nome_completo = ?, email = ?, numero_telefone = ?, Ativo = ? WHERE id = ?`
+	res, err := db.Exec(query, usr.Username, usr.Cargo, usr.CompleteName, usr.Email, usr.Telefone, usr.Ativo, usr.ID)
+	if err != nil {
+		http.Error(w, "Erro ao editar o usuário no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Usuário não encontrado", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(usr)
+
+	fmt.Println("Usuário editado com sucesso!")
+}
+func EditPassword(w http.ResponseWriter, r *http.Request) {
+	var user struct {
+		ID       int    `json:"id"`
+		Password string `json:"password"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar o usuário", http.StatusBadRequest)
+		return
+	}
+
+	trimmedPassword := strings.TrimSpace(user.Password)
+	if len(trimmedPassword) < 6 {
+		http.Error(w, "A senha deve ter no mínimo 6 caracteres", http.StatusBadRequest)
+		return
+	}
+
+	if user.ID == 0 {
+		http.Error(w, "ID do usuário não informado", http.StatusBadRequest)
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(trimmedPassword), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Erro ao gerar a senha", http.StatusInternalServerError)
+		return
+	}
+	query := `UPDATE usuarios SET senha_hash = ? WHERE id = ?`
+	res, err := db.Exec(query, hash, user.ID)
+	if err != nil {
+		http.Error(w, "Erro ao editar a senha no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	affectedRows, _ := res.RowsAffected()
+	if affectedRows == 0 {
+		http.Error(w, "Usuário não encontrado", http.StatusNotFound)
+		return
+	}
+	user.Password = ""
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+
+	fmt.Println("Senha editada com sucesso!")
+}
+
+// FIM DO BLOCO DE FUNÇÕES PARA EDITAR DADOS NO DB
