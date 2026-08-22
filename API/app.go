@@ -50,6 +50,10 @@ func main() {
 	http.HandleFunc("/edit-user", middleware(EditUser, "supervisor", "ADM T.I"))
 	http.HandleFunc("/edit-password", middleware(EditPassword, "supervisor", "ADM T.I"))
 
+	//BLOCO DE BUSCA DE DADOS
+	http.HandleFunc("/search-product", SearchProduct)
+	http.HandleFunc("/search-category", SearchCategory)
+
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Erro ao iniciar o servidor:", err)
@@ -535,3 +539,154 @@ func EditPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // FIM DO BLOCO DE FUNÇÕES PARA EDITAR DADOS NO DB
+
+// BLOCO DE FUNÇÕES PARA BUSCA NO DB
+func SearchProduct(w http.ResponseWriter, r *http.Request) {
+	var product struct {
+		Nome        string `json:"nome"`
+		CategoriaID int    `json:"categoria_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&product)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar o produto", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	var rows *sql.Rows
+	var produtos []produto
+
+	Snome := product.Nome != ""
+	Sid := product.CategoriaID != 0
+	switch {
+
+	case product.Nome == "" && product.CategoriaID == 0:
+		http.Error(w, "Nome ou categoria não informados", http.StatusBadRequest)
+		return
+
+	case Snome == true && Sid == true:
+		name := "%" + product.Nome + "%"
+		query := `SELECT * FROM produtos WHERE nome LIKE ? AND categoria_id = ?`
+		rows, err = db.Query(query, name, product.CategoriaID)
+		if err != nil {
+			http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+	case Snome == true:
+		name := "%" + product.Nome + "%"
+		query := `SELECT * FROM produtos WHERE nome LIKE ?`
+		rows, err = db.Query(query, name)
+		if err != nil {
+			http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+	case Sid == true:
+		query := `SELECT * FROM produtos WHERE categoria_id = ?`
+		rows, err = db.Query(query, product.CategoriaID)
+		if err != nil {
+			http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+	default:
+		http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		if err = rows.Err(); err != nil {
+			http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		if produtos == nil {
+			http.Error(w, "Produto não encontrado", http.StatusNotFound)
+			return
+		}
+		var produto produto
+		err = rows.Scan(&produto.ID, &produto.Nome, &produto.Descricao, &produto.CategoriaID, &produto.PrecoVenda, &produto.Estoque, &produto.PrecoCompra, &produto.CodigoBarras)
+		if err != nil {
+			http.Error(w, "Erro ao buscar o produto no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		produtos = append(produtos, produto)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(produtos)
+}
+func SearchCategory(w http.ResponseWriter, r *http.Request) {
+	var category struct {
+		Nome string `json:"nome"`
+		ID   int    `json:"id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&category)
+	if err != nil {
+		http.Error(w, "Erro ao decodificar a categoria", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	var rows *sql.Rows
+	var categorias []categoria
+
+	Snome := category.Nome != ""
+	Sid := category.ID != 0
+	switch {
+
+	case category.Nome == "" && category.ID == 0:
+		http.Error(w, "Nome ou ID da categoria não informados", http.StatusBadRequest)
+		return
+
+	case Snome == true && Sid == true:
+		name := "%" + category.Nome + "%"
+		query := `SELECT * FROM categoria WHERE nome LIKE ? AND id = ?`
+		rows, err = db.Query(query, name, category.ID)
+		if err != nil {
+			http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+	case Snome == true:
+		name := "%" + category.Nome + "%"
+		query := `SELECT * FROM categoria WHERE nome LIKE ?`
+		rows, err = db.Query(query, name)
+		if err != nil {
+			http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+	case Sid == true:
+		query := `SELECT * FROM categoria WHERE id = ?`
+		rows, err = db.Query(query, category.ID)
+		if err != nil {
+			http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+	default:
+		http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+
+		var categoria categoria
+		err = rows.Scan(&categoria.ID, &categoria.Nome)
+		if err != nil {
+			http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+			return
+		}
+		categorias = append(categorias, categoria)
+	}
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Erro ao buscar a categoria no banco de dados", http.StatusInternalServerError)
+		return
+	}
+	if categorias == nil {
+		http.Error(w, "Categoria não encontrada", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categorias)
+}
