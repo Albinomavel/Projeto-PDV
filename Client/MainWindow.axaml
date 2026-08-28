@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="Client.MainWindow"
+        Title="Almeira SGE">
+        <Window.Background>
+            <ImageBrush Source="/Assets/MII.png" Stretch="UniformToFill" />
+        </Window.Background>
+    
+     <Grid ColumnDefinitions="0.2*,0.6*,0.2*">
+
+            <StackPanel Classes="esq" Grid.Column="0">
+            <Image x:Name="userD" Source="/Assets/user.png" />
+            </StackPanel>
+
+        <Border Classes="mei" Grid.Column="1">
+            <StackPanel Classes="cabecalho">
+                <TextBlock x:Name="title" Text="Olá mundo!" />
+                <TextBlock x:Name="title2" Text="O que deseja realizar?" />
+                <ComboBox x:Name="combo">
+                    <ComboBoxItem Content="Cadastro" />
+                    <ComboBoxItem Content="Delete" />
+                    <ComboBoxItem Content="Editar" />
+                    <ComboBoxItem Content="Listar" />
+                </ComboBox>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Classes="dir" Grid.Column="2">
+            <Image x:Name="NotC" Source="/Assets/notification.png" />
+            <TextBlock x:Name="NotT" Text="Notificações" />
+        </StackPanel>
+    </Grid>
+</Window>
